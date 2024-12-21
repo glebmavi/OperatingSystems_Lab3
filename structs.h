@@ -3,7 +3,7 @@
 
 #define MAX_VMA_COUNT 256
 #define MAX_FILE_PATH 256
-#include <sys/types.h>
+#include <linux/types.h>
 
 /*
 Each entry describes one VMA region, including:

@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
-project(OS_Lab3)
-
-set(CMAKE_CXX_STANDARD 20)
+project(OS_Lab3 C)
 
 add_subdirectory(kernel)
 add_subdirectory(user)
