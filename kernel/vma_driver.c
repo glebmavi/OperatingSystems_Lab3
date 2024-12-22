@@ -86,44 +86,44 @@ static void fill_vma_filename(const struct vm_area_struct *vma, char *filename, 
 
 static const char *identify_vma_region(const struct vm_area_struct *vma)
 {
-    /*
-     * Check stack: the stack region includes the
-     * address where start_stack resides, or can check flags (VM_STACK_FLAGS).
-     * A rough check is that vma intersects the 'start_stack' address.
-     */
-    if (vma->vm_start <= vma->vm_mm->start_stack &&
-        vma->vm_end >= vma->vm_mm->start_stack) {
-        return "stack";
-        }
+    const struct mm_struct *mm = vma->vm_mm;
 
-    /*
-     * Check heap: rough check is to see if vma exactly matches
-     * the area from 'start_brk'...'brk'.
-     */
-    if (vma->vm_start == vma->vm_mm->start_brk &&
-        vma->vm_end == vma->vm_mm->brk) {
+    // Check Code Segment
+    if (vma->vm_start == mm->start_code && vma->vm_end == mm->end_code) {
+        return "code";
+    }
+
+    // Check Data Segment
+    if (vma->vm_start == mm->start_data && vma->vm_end == mm->end_data) {
+        return "data";
+    }
+
+    // Check Arguments Segment
+    if (vma->vm_start == mm->arg_start && vma->vm_end == mm->arg_end) {
+        return "arguments";
+    }
+
+    // Check Environment Segment
+    if (vma->vm_start == mm->env_start && vma->vm_end == mm->env_end) {
+        return "environment";
+    }
+
+    // Check Heap
+    if (vma->vm_start == mm->start_brk && vma->vm_end == mm->brk) {
         return "heap";
-        }
+    }
 
-    if ((void *)vma->vm_start == vma->vm_mm->context.vdso) {
+    // Check Stack
+    if (vma->vm_start <= mm->start_stack && vma->vm_end >= mm->start_stack) {
+        return "stack";
+    }
+
+    // Check VDSO
+    if (vma->vm_start == (unsigned long)mm->context.vdso) {
         return "vdso";
     }
 
     return "other";
-}
-
-static const char *refine_region_name_by_filename(const char *region_name,
-                                                  const char *file_path)
-{
-    // If we see "[vdso]" in the path, let's call it "vdso"
-    if (strstr(file_path, "[vdso]")) {
-        return "vdso";
-    }
-    if (strstr(file_path, "[vvar]")) {
-        return "vvar";
-    }
-    // Otherwise, maybe it's truly anonymous.
-    return region_name;
 }
 
 
@@ -206,11 +206,9 @@ static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const 
             /* Fill the file path */
             fill_vma_filename(vma, info->file_name, MAX_FILE_PATH);
 
-            /* Identify region type: "stack", "heap", "anonymous/other", etc. */
+            /* Identify region type: "stack", "heap", "code", etc. */
             {
                 const char *region = identify_vma_region(vma);
-                /* Further refine if we detect "[vdso]" or "[vvar]" */
-                region = refine_region_name_by_filename(region, info->file_name);
                 strscpy(info->region_name, region, MAX_REGION_NAME);
             }
             count++;
