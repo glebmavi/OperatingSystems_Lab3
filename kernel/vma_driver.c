@@ -90,9 +90,9 @@ static void fill_vma_filename(const struct vm_area_struct *vma, char *filename, 
 /**
  * The main ioctl function which handles our VMA dump request.
  */
-static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const unsigned long arg)
 {
-    struct vma_info_buffer kbuf; /* Kernel copy of the user struct */
+    struct vma_info_buffer *kbuf; /* Kernel copy of the user struct */
     struct task_struct *task;
     struct mm_struct *mm;
     int ret = 0;
@@ -104,19 +104,29 @@ static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
         return -EINVAL;
 
     /*
+     * Allocate memory for kbuf dynamically
+     */
+    kbuf = kmalloc(sizeof(struct vma_info_buffer), GFP_KERNEL);
+    if (!kbuf) {
+        pr_err("vma_driver: failed to allocate memory for kbuf\n");
+        return -ENOMEM;
+    }
+
+    /*
      * Copy the user-provided buffer into kernel space.
      */
-    if (copy_from_user(&kbuf, (void __user *)arg, sizeof(kbuf))) {
+    if (copy_from_user(kbuf, (void __user *)arg, sizeof(struct vma_info_buffer))) {
         pr_err("vma_driver: failed to copy data from user\n");
+        kfree(kbuf);
         return -EFAULT;
     }
 
     /*
      * Look up the task_struct by PID
      */
-    task = get_pid_task(find_vpid(kbuf.pid), PIDTYPE_PID);
+    task = get_pid_task(find_vpid(kbuf->pid), PIDTYPE_PID);
     if (!task) {
-        pr_err("vma_driver: failed to find task for PID %d\n", kbuf.pid);
+        pr_err("vma_driver: failed to find task for PID %d\n", kbuf->pid);
         return -ESRCH;
     }
 
@@ -126,7 +136,7 @@ static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
      */
     mm = get_task_mm(task);
     if (!mm) {
-        pr_err("vma_driver: could not get mm for PID %d\n", kbuf.pid);
+        pr_err("vma_driver: could not get mm for PID %d\n", kbuf->pid);
         put_task_struct(task);
         return -EINVAL;
     }
@@ -138,7 +148,7 @@ static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 
     /*
      * Use Maple Tree iteration to gather VMAs.
-     * The kernel provides a helper approach with vma_iter_init() + vma_next().
+     * The kernel provides a helper approach with vma_iter_init(...) + vma_next(...).
      */
     {
         struct vma_iterator vmi;
@@ -148,17 +158,17 @@ static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
         vma_iter_init(&vmi, mm, 0);
 
         for (vma = vma_next(&vmi); vma && count < MAX_VMA_COUNT; vma = vma_next(&vmi)) {
-            kbuf.vmas[count].start = vma->vm_start;
-            kbuf.vmas[count].end   = vma->vm_end;
-            kbuf.vmas[count].flags = vma->vm_flags;
+            kbuf->vmas[count].start = vma->vm_start;
+            kbuf->vmas[count].end   = vma->vm_end;
+            kbuf->vmas[count].flags = vma->vm_flags;
 
-            fill_vma_filename(vma, kbuf.vmas[count].file_name, MAX_FILE_PATH);
+            fill_vma_filename(vma, kbuf->vmas[count].file_name, MAX_FILE_PATH);
 
             count++;
         }
 
         /* Store the actual number of VMAs we found */
-        kbuf.count = count;
+        kbuf->count = count;
     }
 
     /*
@@ -171,11 +181,12 @@ static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
     /*
      * Copy the results back to user space
      */
-    if (copy_to_user((void __user *)arg, &kbuf, sizeof(kbuf))) {
+    if (copy_to_user((void __user *)arg, kbuf, sizeof(struct vma_info_buffer))) {
         pr_err("vma_driver: failed to copy data back to user\n");
         ret = -EFAULT;
     }
 
+    kfree(kbuf);
     return ret;
 }
 

@@ -60,3 +60,4 @@ add_executable(dummy
 
 # CLion IDE will find symbols from <linux/*>
 target_include_directories("dummy" PRIVATE ${KERNELHEADERS_INCLUDE_DIRS})
+target_include_directories("dummy" PRIVATE ${KERNELDIR})
