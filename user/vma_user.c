@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -23,7 +22,7 @@ int main(const int argc, char *argv[])
     }
 
     // Open the device
-    int fd = open("/dev/vma_device", O_RDWR);
+    const int fd = open("/dev/vma_device", O_RDWR);
     if (fd < 0) {
         perror("Failed to open /dev/vma_device");
         return 1;
