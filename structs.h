@@ -5,7 +5,7 @@
 #define MAX_FILE_PATH 256
 #define MAX_REGION_NAME 32
 #define MAX_ADDRESS_NAME 32
-#define MAX_SPECIAL_ADDRESSES 10
+#define MAX_SPECIAL_ADDRESSES 16
 
 /*
 Each entry describes one VMA region, including:
