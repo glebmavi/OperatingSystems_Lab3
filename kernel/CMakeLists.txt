@@ -1,13 +1,15 @@
 cmake_minimum_required(VERSION 3.30)
 project(vma_kernel_module C)
 
+add_definitions(-D__KERNEL__ -DMODULE)
+
+# Add the cmake module for finding kernels
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 find_package(KernelHeaders REQUIRED)
 
+# Get current kernel version
 execute_process(COMMAND uname -r OUTPUT_VARIABLE KERNEL_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 set(KERNELDIR /lib/modules/${KERNEL_VERSION}/build)
-
-add_definitions(-D__KERNEL__ -DMODULE)
 
 set(KERNEL_SOURCES vma_driver.c)
 
