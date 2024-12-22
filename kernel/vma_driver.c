@@ -109,7 +109,7 @@ static const char *identify_vma_region(const struct vm_area_struct *vma)
         return "vdso";
     }
 
-    return "anonymous/other";
+    return "other";
 }
 
 static const char *refine_region_name_by_filename(const char *region_name,

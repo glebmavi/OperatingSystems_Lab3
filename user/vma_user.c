@@ -62,9 +62,9 @@ int main(const int argc, char *argv[])
 
     printf("VMA info for PID: %d\n", pid);
     printf("Count of VMAs: %d\n", buf.count);
-    printf("%-4s %-16s %-16s %-9s %-10s %s\n",
+    printf("%-4s %-16s %-16s %-5s %-16s %s\n",
            "Idx", "Start", "End", "Flags", "Region", "FilePath");
-    printf("--------------------------------------------------------------------------\n");
+    printf("---------------------------------------------------------------------------\n");
 
     for (int i = 0; i < buf.count; i++) {
         struct vma_info *vma = &buf.vmas[i];
@@ -72,7 +72,7 @@ int main(const int argc, char *argv[])
 
         print_flags(vma->flags, flags, sizeof(flags));
 
-        printf("%-4d 0x%-14lx 0x%-14lx %-9s %-10s %s\n",
+        printf("%-4d 0x%-14lx 0x%-14lx %-5s %-16s %s\n",
                i,
                vma->start,
                vma->end,
