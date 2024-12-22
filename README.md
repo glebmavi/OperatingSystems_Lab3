@@ -37,5 +37,21 @@
 - Модуль ядра возвращает информацию обратно в пользовательскую программу.
 - Пользовательская программа выводит результат в удобном для чтения виде.
 
-### Комментарии
 
+### Последовательность запуска
+Для сборки использовался CLion
+1. Соберите vma_driver.c и vma_user.c
+
+Для более подробной информации о шагах 2-7, см. [1](https://unix.stackexchange.com/a/751571) или [2](https://www.redhat.com/en/blog/secure-boot-systemtap)
+
+2. Напишите свой ключ `x509.genkey`. В [текущем файле](./scripts/x509.genkey) необходимо указать собственное значение CN.
+3. Сгенерируйте пару ключей запуская [`key_creation.sh`](./scripts/key_creation.sh).
+4. С готовой парой ключей запустите [`key_installation.sh`](./scripts/key_installation.sh).
+5. Перезапустите систему. При перезагрузке если у вас Linux с UEFI Secure Boot, то выберите Enroll MOK > Continue > Yes > Введите пароль установленный в предыдущем шаге.
+6. Для подтверждения установки ключа можете запустить `mokutil -l`.
+7. Подпишите `vma_driver.ko` с помощью [`sign_module.sh`](./scripts/sign_module.sh).
+
+
+8. Загрузите модуль в систему с помощью [`load_driver.sh`](./scripts/load_driver.sh).
+9. Запустите `vma_user`. Пример: `sudo cmake-build-debug/user/vma_user 3640`, где 3640 - PID. Вставьте соответсвующий путь к `vma_user`.
+   
