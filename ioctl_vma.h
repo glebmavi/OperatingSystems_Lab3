@@ -10,7 +10,7 @@
 
 /*
 Ioctl command definition that is read/write:
-- user passes in vma_info_buffer with 'pid' set
+- user passes in vma_info_buffer with PID set
 - kernel fills in the rest of the fields
 */
 #define VMA_IOC_GET_INFO _IOWR(VMA_IOC_MAGIC, 1, struct vma_info_buffer*)

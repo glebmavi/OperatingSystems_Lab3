@@ -7,9 +7,7 @@
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/mm_types.h>
-#include <linux/sched.h>
 #include <linux/sched/signal.h>
-#include <linux/ioctl.h>
 #include <linux/pid.h>
 #include <linux/namei.h>
 
@@ -45,7 +43,7 @@ static const struct file_operations vma_fops = {
     .unlocked_ioctl = vma_unlocked_ioctl,
 };
 
-/*
+/**
  * Called when userspace opens /dev/vma_device
  */
 static int vma_open(struct inode *inode, struct file *file) {
@@ -53,7 +51,7 @@ static int vma_open(struct inode *inode, struct file *file) {
     return 0;
 }
 
-/*
+/**
  * Called when userspace closes /dev/vma_device
  */
 static int vma_release(struct inode *inode, struct file *file) {
@@ -62,7 +60,7 @@ static int vma_release(struct inode *inode, struct file *file) {
 }
 
 /**
- * Helper to copy the file name from vm_area_struct->vm_file
+ * Helper to copy the file name from vm_area_struct->vm_file.
  * We use d_path() to attempt to get a path, or mark as "anonymous"
  */
 static void fill_vma_filename(const struct vm_area_struct *vma, char *filename, const size_t max_len)
@@ -86,12 +84,53 @@ static void fill_vma_filename(const struct vm_area_struct *vma, char *filename, 
     }
 }
 
+static const char *identify_vma_region(const struct vm_area_struct *vma)
+{
+    /*
+     * Check stack: the stack region includes the
+     * address where start_stack resides, or can check flags (VM_STACK_FLAGS).
+     * A rough check is that vma intersects the 'start_stack' address.
+     */
+    if (vma->vm_start <= vma->vm_mm->start_stack &&
+        vma->vm_end >= vma->vm_mm->start_stack) {
+        return "stack";
+        }
+
+    /*
+     * Check heap: rough check is to see if vma exactly matches
+     * the area from 'start_brk'...'brk'.
+     */
+    if (vma->vm_start == vma->vm_mm->start_brk &&
+        vma->vm_end == vma->vm_mm->brk) {
+        return "heap";
+        }
+
+    if ((void *)vma->vm_start == vma->vm_mm->context.vdso) {
+        return "vdso";
+    }
+
+    return "anonymous/other";
+}
+
+static const char *refine_region_name_by_filename(const char *region_name,
+                                                  const char *file_path)
+{
+    // If we see "[vdso]" in the path, let's call it "vdso"
+    if (strstr(file_path, "[vdso]")) {
+        return "vdso";
+    }
+    if (strstr(file_path, "[vvar]")) {
+        return "vvar";
+    }
+    // Otherwise, maybe it's truly anonymous.
+    return region_name;
+}
+
 
 /**
  * The main ioctl function which handles our VMA dump request.
  */
-static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const unsigned long arg)
-{
+static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const unsigned long arg) {
     struct vma_info_buffer *kbuf; /* Kernel copy of the user struct */
     struct task_struct *task;
     struct mm_struct *mm;
@@ -158,15 +197,24 @@ static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const 
         vma_iter_init(&vmi, mm, 0);
 
         for (vma = vma_next(&vmi); vma && count < MAX_VMA_COUNT; vma = vma_next(&vmi)) {
-            kbuf->vmas[count].start = vma->vm_start;
-            kbuf->vmas[count].end   = vma->vm_end;
-            kbuf->vmas[count].flags = vma->vm_flags;
+            struct vma_info *info = &kbuf->vmas[count];
 
-            fill_vma_filename(vma, kbuf->vmas[count].file_name, MAX_FILE_PATH);
+            info->start = vma->vm_start;
+            info->end   = vma->vm_end;
+            info->flags = vma->vm_flags;
 
+            /* Fill the file path */
+            fill_vma_filename(vma, info->file_name, MAX_FILE_PATH);
+
+            /* Identify region type: "stack", "heap", "anonymous/other", etc. */
+            {
+                const char *region = identify_vma_region(vma);
+                /* Further refine if we detect "[vdso]" or "[vvar]" */
+                region = refine_region_name_by_filename(region, info->file_name);
+                strscpy(info->region_name, region, MAX_REGION_NAME);
+            }
             count++;
         }
-
         /* Store the actual number of VMAs we found */
         kbuf->count = count;
     }
@@ -195,10 +243,8 @@ static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const 
  */
 static int __init vma_driver_init(void)
 {
-    int err;
-
     /* Allocate a device number dynamically */
-    err = alloc_chrdev_region(&devt, 0, 1, DEVICE_NAME);
+    int err = alloc_chrdev_region(&devt, 0, 1, DEVICE_NAME);
     if (err < 0) {
         pr_err("vma_driver: failed to allocate char device region\n");
         return err;
@@ -234,8 +280,7 @@ static int __init vma_driver_init(void)
 /**
  * Module exit: clean up everything
  */
-static void __exit vma_driver_exit(void)
-{
+static void __exit vma_driver_exit(void) {
     device_destroy(vma_class, devt);
     cdev_del(&vma_cdev);
     class_destroy(vma_class);
