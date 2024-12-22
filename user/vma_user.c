@@ -18,7 +18,7 @@
 #include "../ioctl_vma.h"
 
 // Function to decode flags
-void print_flags(unsigned long flags, char *buffer, const size_t size) {
+void print_flags(const unsigned long flags, char *buffer, const size_t size) {
     snprintf(buffer, size, "%c%c%c",
              (flags & VM_READ) ? 'R' : '-',
              (flags & VM_WRITE) ? 'W' : '-',
@@ -49,7 +49,7 @@ int main(const int argc, char *argv[])
     // Prepare the buffer
     struct vma_info_buffer buf = {0};
     buf.pid = pid;
-    buf.count = 0;
+    buf.vma_count = 0;
 
     // Make the ioctl call
     if (ioctl(fd, VMA_IOC_GET_INFO, &buf) < 0) {
@@ -61,12 +61,24 @@ int main(const int argc, char *argv[])
     close(fd);
 
     printf("VMA info for PID: %d\n", pid);
-    printf("Count of VMAs: %d\n", buf.count);
+    printf("Count of VMAs: %d\n", buf.vma_count);
+    printf("Count of special addresses: %d\n\n", buf.speadd_count);
+
+    if (buf.speadd_count > 0) {
+        printf("Special Addresses:\n");
+        for (int i = 0; i < buf.speadd_count; i++) {
+            printf("  0x%016lx  %-12s\n",
+                   buf.speadds[i].address,
+                   buf.speadds[i].address_name);
+        }
+        printf("\n");
+    }
+
     printf("%-4s %-16s %-16s %-5s %-16s %s\n",
            "Idx", "Start", "End", "Flags", "Region", "FilePath");
     printf("---------------------------------------------------------------------------\n");
 
-    for (int i = 0; i < buf.count; i++) {
+    for (int i = 0; i < buf.vma_count; i++) {
         struct vma_info *vma = &buf.vmas[i];
         char flags[4] = {0};
 

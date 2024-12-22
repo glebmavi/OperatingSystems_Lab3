@@ -32,6 +32,7 @@ static struct class *vma_class = NULL;
 static int vma_open(struct inode *inode, struct file *file);
 static int vma_release(struct inode *inode, struct file *file);
 static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+bool is_addr_within_range(const unsigned long addr, const unsigned long start, const unsigned long end);
 
 /*
  * File operations structure
@@ -84,41 +85,99 @@ static void fill_vma_filename(const struct vm_area_struct *vma, char *filename, 
     }
 }
 
-static const char *identify_vma_region(const struct vm_area_struct *vma)
-{
+/**
+ * Fill the special_address array with interesting mm_struct addresses:
+ *   - start_code, end_code
+ *   - start_data, end_data
+ *   - start_brk, brk
+ *   - start_stack
+ *   - arg_start, arg_end
+ *   - env_start, env_end
+ */
+static void retrieve_special_addresses(struct mm_struct *mm, struct special_address *speadds, int *speadd_count) {
+    int idx = 0;
+
+    speadds[idx].address = mm->start_code;
+    strscpy(speadds[idx].address_name, "start_code", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->end_code;
+    strscpy(speadds[idx].address_name, "end_code", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->start_data;
+    strscpy(speadds[idx].address_name, "start_data", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->end_data;
+    strscpy(speadds[idx].address_name, "end_data", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->start_brk;
+    strscpy(speadds[idx].address_name, "start_brk", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->brk;
+    strscpy(speadds[idx].address_name, "brk", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->start_stack;
+    strscpy(speadds[idx].address_name, "start_stack", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->arg_start;
+    strscpy(speadds[idx].address_name, "arg_start", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->arg_end;
+    strscpy(speadds[idx].address_name, "arg_end", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->env_start;
+    strscpy(speadds[idx].address_name, "env_start", MAX_ADDRESS_NAME);
+    idx++;
+
+    speadds[idx].address = mm->env_end;
+    strscpy(speadds[idx].address_name, "env_end", MAX_ADDRESS_NAME);
+    idx++;
+
+    *speadd_count = idx;
+}
+
+bool is_addr_within_range(const unsigned long addr, const unsigned long start, const unsigned long end) {
+    return addr >= start && addr < end;
+}
+
+/**
+ * Sets the region name for a given vma
+ */
+static const char *identify_vma_region(const struct vm_area_struct *vma) {
     const struct mm_struct *mm = vma->vm_mm;
 
-    // Check Code Segment
-    if (vma->vm_start == mm->start_code && vma->vm_end == mm->end_code) {
+    if (is_addr_within_range(mm->start_code, vma->vm_start, vma->vm_end) || is_addr_within_range(mm->end_code, vma->vm_start, vma->vm_end)) {
         return "code";
     }
 
-    // Check Data Segment
-    if (vma->vm_start == mm->start_data && vma->vm_end == mm->end_data) {
+    if (is_addr_within_range(mm->start_data, vma->vm_start, vma->vm_end) || is_addr_within_range(mm->end_data, vma->vm_start, vma->vm_end)) {
         return "data";
     }
 
-    // Check Arguments Segment
-    if (vma->vm_start == mm->arg_start && vma->vm_end == mm->arg_end) {
+    if (is_addr_within_range(mm->arg_start, vma->vm_start, vma->vm_end) || is_addr_within_range(mm->arg_end, vma->vm_start, vma->vm_end)) {
         return "arguments";
     }
 
-    // Check Environment Segment
-    if (vma->vm_start == mm->env_start && vma->vm_end == mm->env_end) {
+    if (is_addr_within_range(mm->env_start, vma->vm_start, vma->vm_end) || is_addr_within_range(mm->env_end, vma->vm_start, vma->vm_end)) {
         return "environment";
     }
 
-    // Check Heap
-    if (vma->vm_start == mm->start_brk && vma->vm_end == mm->brk) {
+    if (is_addr_within_range(mm->start_brk, vma->vm_start, vma->vm_end) || is_addr_within_range(mm->brk, vma->vm_start, vma->vm_end)) {
         return "heap";
     }
 
-    // Check Stack
-    if (vma->vm_start <= mm->start_stack && vma->vm_end >= mm->start_stack) {
+    if (is_addr_within_range(mm->start_stack, vma->vm_start, vma->vm_end)) {
         return "stack";
     }
 
-    // Check VDSO
     if (vma->vm_start == (unsigned long)mm->context.vdso) {
         return "vdso";
     }
@@ -186,6 +245,11 @@ static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const 
     down_read(&mm->mmap_lock);
 
     /*
+     * Get "special" addresses from mm_struct
+     */
+    retrieve_special_addresses(mm, kbuf->speadds, &kbuf->speadd_count);
+
+    /*
      * Use Maple Tree iteration to gather VMAs.
      * The kernel provides a helper approach with vma_iter_init(...) + vma_next(...).
      */
@@ -214,7 +278,7 @@ static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const 
             count++;
         }
         /* Store the actual number of VMAs we found */
-        kbuf->count = count;
+        kbuf->vma_count = count;
     }
 
     /*
