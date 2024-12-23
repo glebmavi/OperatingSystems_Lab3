@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #ifndef VM_READ
 #define VM_READ    0x00000001
@@ -23,6 +24,21 @@ void print_flags(const unsigned long flags, char *buffer, const size_t size) {
              (flags & VM_READ) ? 'R' : '-',
              (flags & VM_WRITE) ? 'W' : '-',
              (flags & VM_EXEC) ? 'X' : '-');
+}
+
+// Function to format size into human-readable string
+const char* format_size(const unsigned long size, char *buffer, const size_t buf_size) {
+    const char *units[] = {"B", "KB", "MB", "GB", "TB"};
+    int unit_index = 0;
+    double readable_size = (double)size;
+
+    while (readable_size >= 1024 && unit_index < 4) {
+        readable_size /= 1024;
+        unit_index++;
+    }
+
+    snprintf(buffer, buf_size, "%.1f %s", readable_size, units[unit_index]);
+    return buffer;
 }
 
 int main(const int argc, char *argv[])
@@ -74,9 +90,11 @@ int main(const int argc, char *argv[])
         printf("\n");
     }
 
-    printf("%-4s %-16s %-16s %-5s %-16s %s\n",
-           "Idx", "Start", "End", "Flags", "Region", "FilePath");
-    printf("---------------------------------------------------------------------------\n");
+    printf("%-4s %-16s %-16s %-10s %-5s %-16s %s\n",
+           "Idx", "Start", "End", "Size", "Flags", "Region", "FilePath");
+    printf("-------------------------------------------------------------------------------\n");
+
+    char size_str[16];
 
     for (int i = 0; i < buf.vma_count; i++) {
         struct vma_info *vma = &buf.vmas[i];
@@ -84,10 +102,13 @@ int main(const int argc, char *argv[])
 
         print_flags(vma->flags, flags, sizeof(flags));
 
-        printf("%-4d 0x%-14lx 0x%-14lx %-5s %-16s %s\n",
+        format_size(vma->size, size_str, sizeof(size_str));
+
+        printf("%-4d 0x%-14lx 0x%-14lx %-10s %-5s %-16s %s\n",
                i,
                vma->start,
                vma->end,
+               size_str,
                flags,
                vma->region_name,
                vma->file_name);

@@ -32,7 +32,7 @@ static struct class *vma_class = NULL;
 static int vma_open(struct inode *inode, struct file *file);
 static int vma_release(struct inode *inode, struct file *file);
 static long vma_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
-bool is_addr_within_range(const unsigned long addr, const unsigned long start, const unsigned long end);
+bool is_addr_within_range(unsigned long addr, unsigned long start, unsigned long end);
 
 /*
  * File operations structure
@@ -266,6 +266,8 @@ static long vma_unlocked_ioctl(struct file *file, const unsigned int cmd, const 
             info->start = vma->vm_start;
             info->end   = vma->vm_end;
             info->flags = vma->vm_flags;
+
+            info->size  = info->end - info->start;
 
             /* Fill the file path */
             fill_vma_filename(vma, info->file_name, MAX_FILE_PATH);

@@ -11,6 +11,7 @@
 Each entry describes one VMA region, including:
  - start address
  - end address
+ - size (end - start)
  - flags (from vm_area_struct->vm_flags)
  - file_name if associated file exists
  - region_name (heap, stack, vdso, vvar, or "other")
@@ -18,6 +19,7 @@ Each entry describes one VMA region, including:
 struct vma_info {
     unsigned long start;
     unsigned long end;
+    unsigned long size;
     unsigned long flags;
     char region_name[MAX_REGION_NAME];
     char file_name[MAX_FILE_PATH];
